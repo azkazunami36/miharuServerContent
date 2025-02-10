@@ -249,7 +249,17 @@ async function convert() {
         const blogQuantity = document.getElementById("blogQuantity");
         if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
 
-        fs.writeFileSync("../index.html", dom.serialize());
+        const text = dom.serialize();
+        const savePath = "../index.html";
+
+        // 内容が一致しなかったら保存
+        if (fs.existsSync(savePath)) {
+            if (fs.readFileSync(savePath, "utf-8") !== text) {
+                fs.writeFileSync(savePath, text);
+            }
+        } else {
+            fs.writeFileSync(savePath, text);
+        }
     }
     // 記事毎のHTMLを作成する関数
     async function createBlogHTML() {
@@ -442,11 +452,38 @@ async function convert() {
             const blogQuantity = document.getElementById("blogQuantity");
             if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
 
-            fs.writeFileSync("../htmlBlogSource/" + i + ".html", dom.serialize());
+            const text = dom.serialize();
+            const savePath = "../htmlBlogSource/" + i + ".html";
+
+            // 内容が一致しなかったら保存
+            if (fs.existsSync(savePath)) {
+                if (fs.readFileSync(savePath, "utf-8") !== text) {
+                    fs.writeFileSync(savePath, text);
+                }
+            } else {
+                fs.writeFileSync(savePath, text);
+            }
         }
+    }
+    async function createSiteMapTxt() {
+        const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
+        const blogInfo = getBlogInfoJSON();
+        let siteMap = baseSiteMap;
+        for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
+            siteMap += "https://miharu.blog/htmlBlogSource/" + i + ".html\n";
+        }
+        const savePath = "../sitemap.txt";
+        if (fs.existsSync(savePath)) {
+            if (fs.readFileSync(savePath, "utf-8") !== siteMap) {
+                fs.writeFileSync(savePath, siteMap);
+            }
+        } else {
+            fs.writeFileSync(savePath, siteMap);
+        };
     }
     await createIndexHTML();
     await createBlogHTML();
+    await createSiteMapTxt();
 }
 
 convert();
