@@ -321,6 +321,18 @@ async function convert() {
                 return string;
             })();
             fragment.appendChild(status);
+
+            if (blogInfo[i].topImageName) {
+                // pの中にimgを入れる
+                const p = document.createElement("p");
+                const img = document.createElement("img");
+                img.id = "topImage";
+                img.classList.add("ignorePreview");
+                img.src = "../markdownSource/" + i + "/" + blogInfo[i].topImageName;
+                p.appendChild(img);
+                fragment.appendChild(p);
+            }
+
             if (!blogInfo[i].created) {
                 const notes = document.createElement("p");
                 const boldText = document.createElement("strong");
