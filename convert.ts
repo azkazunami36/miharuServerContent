@@ -470,7 +470,7 @@ async function convert() {
         const blogInfo = getBlogInfoJSON();
         let siteMap = baseSiteMap;
         for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
-            siteMap += "https://miharu.blog/htmlBlogSource/" + i + ".html\n";
+            siteMap += "https://www.miharu.blog/htmlBlogSource/" + i + ".html\n";
         }
         const savePath = "../sitemap.txt";
         if (fs.existsSync(savePath)) {
