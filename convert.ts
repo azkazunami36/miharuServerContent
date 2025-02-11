@@ -4,18 +4,18 @@ import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 
-// このmain.tsはmiharu.blog/serverContent/main.tsという位置にあります。そしてクライアントはserverContent以降にアクセスできません。
+// このmain.tsはwww.miharu.blog/serverContent/main.tsという位置にあります。そしてクライアントはserverContent以降にアクセスできません。
 
 /**
- * ブログのタイトル、投稿日時などの情報が記録されたJSONの保存場所です。miharu.blog/blogInfo.jsonという位置です。
+ * ブログのタイトル、投稿日時などの情報が記録されたJSONの保存場所です。www.miharu.blog/blogInfo.jsonという位置です。
  */
 const blogInfoJSONPath = "../blogInfo.json";
 /**
- * ジャンルの説明が記録されたJSONの保存場所です。miharu.blog/genreExplanation.jsonという位置です。
+ * ジャンルの説明が記録されたJSONの保存場所です。www.miharu.blog/genreExplanation.jsonという位置です。
  */
 const genreExplanationJSONPath = "../genreExplanation.json";
 /**
- * ブログのメインデータ、記事内容と写真、動画などのメディアデータが格納されたフォルダです。miharu.blog/markdownSourceという位置です。構造は
+ * ブログのメインデータ、記事内容と写真、動画などのメディアデータが格納されたフォルダです。www.miharu.blog/markdownSourceという位置です。構造は
  * ```txt
  * markdownSource
  * -> 0.md
@@ -29,7 +29,7 @@ const genreExplanationJSONPath = "../genreExplanation.json";
  */
 const markdownSourceFolderPath = "../markdownSource";
 /**
- * あまり記事とは関係ないが、サイトを表示するうえで利用する写真の配置位置です。miharu.blog/imageSourceという位置です。
+ * あまり記事とは関係ないが、サイトを表示するうえで利用する写真の配置位置です。www.miharu.blog/imageSourceという位置です。
  */
 const imageSource = "../imageSource";
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
@@ -115,9 +115,9 @@ async function convert() {
         document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
             title: "みはるのホームページ",
             description: "みはるのホームページです。",
-            image: "https://miharu.blog/imageSource/ogp.png",
+            image: "https://www.miharu.blog/imageSource/ogp.png",
             alt: "みはるのホームページ",
-            url: "https://miharu.blog/",
+            url: "https://www.miharu.blog/",
             siteName: "みはるのホームページ",
             twitterCard: "summary_large_image"
         });
@@ -153,7 +153,7 @@ async function convert() {
             rightDiv.classList.add("right");
             const title = document.createElement("p");
             const link = document.createElement("a");
-            link.href = "https://miharu.blog/htmlBlogSource/" + i + ".html";
+            link.href = "https://www.miharu.blog/htmlBlogSource/" + i + ".html";
             link.innerHTML = info.title;
             title.appendChild(link);
             leftDiv.appendChild(title);
@@ -281,8 +281,8 @@ async function convert() {
             document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
                 title: blogInfo[i].title,
                 description: (await marked(markdownText.split("\n")[0])).replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ''),
-                image: (blogInfo[i].topImageName !== undefined) ? "https://miharu.blog/markdownSource/" + i + "/" + blogInfo[i].topImageName : undefined,
-                url: "https://miharu.blog/htmlBlogSource/" + i + ".html",
+                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/markdownSource/" + i + "/" + blogInfo[i].topImageName : undefined,
+                url: "https://www.miharu.blog/htmlBlogSource/" + i + ".html",
                 siteName: "みはるのホームページ",
                 twitterCard: "summary_large_image"
             });
