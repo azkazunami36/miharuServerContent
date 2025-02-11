@@ -96,6 +96,10 @@ function createOGPrefix(info: {
     ${domain ? `<meta name="twitter:domain" content="${domain}">` : ""}`;
 }
 
+function writeFileSyncCRLF(path: string, data: string) {
+    fs.writeFileSync(path, data.replace(/\r?\n/g, "\r\n"), "utf-8");
+}
+
 async function convert() {
     /**
      * index.htmlの作成
@@ -255,10 +259,10 @@ async function convert() {
         // 内容が一致しなかったら保存
         if (fs.existsSync(savePath)) {
             if (fs.readFileSync(savePath, "utf-8") !== text) {
-                fs.writeFileSync(savePath, text);
+                writeFileSyncCRLF(savePath, text);
             }
         } else {
-            fs.writeFileSync(savePath, text);
+            writeFileSyncCRLF(savePath, text);
         }
     }
     // 記事毎のHTMLを作成する関数
@@ -458,10 +462,10 @@ async function convert() {
             // 内容が一致しなかったら保存
             if (fs.existsSync(savePath)) {
                 if (fs.readFileSync(savePath, "utf-8") !== text) {
-                    fs.writeFileSync(savePath, text);
+                    writeFileSyncCRLF(savePath, text);
                 }
             } else {
-                fs.writeFileSync(savePath, text);
+                writeFileSyncCRLF(savePath, text);
             }
         }
     }
@@ -475,10 +479,10 @@ async function convert() {
         const savePath = "../sitemap.txt";
         if (fs.existsSync(savePath)) {
             if (fs.readFileSync(savePath, "utf-8") !== siteMap) {
-                fs.writeFileSync(savePath, siteMap);
+                writeFileSyncCRLF(savePath, siteMap);
             }
         } else {
-            fs.writeFileSync(savePath, siteMap);
+            writeFileSyncCRLF(savePath, siteMap);
         };
     }
     await createIndexHTML();
