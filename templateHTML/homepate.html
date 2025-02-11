@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <title>みはるのホームページ - miharu</title>
+    <link rel="stylesheet" href="./src/style.css">
+</head>
+
+<body>
+    <header></header>
+    <main>
+        <section id="description">
+            <h1>みはるのホームページ</h1>
+            <p>ここは貧乏学生が知識を無料で売るために作ったサイトです。</p>
+            <p>記事やイラスト、小説を主に見ることができます。ほかにも漫画などを見ることができるようなホームページになるよう、このサイトは日々更新していきたいと思います！</p>
+        </section>
+        <section id="blogList">
+            <script type="module">
+                import { getUrlQueries } from "./src/getUrlQueriesModule.js";
+                const { incompleteView } = getUrlQueries();
+                if (incompleteView == "true") {
+                    const blogList = document.getElementById("blogListUL");
+                    blogList.classList.add("incompleteView");
+                }
+            </script>
+            <h2>記事一覧</h2>
+            <ul id="blogListUL">
+            </ul>
+        </section>
+        <section id="discord">
+            <h2>Discordサーバー</h2>
+            <p>このみはるのホームページについて要望、アドバイスなどのご相談をしていただけるよう、Discordサーバー「みはるのサーバー」を立ち上げています。良ければご参加ください。</p>
+            <p>
+                <iframe src="https://discord.com/widget?id=1310921916936097793&theme=dark" width="350" height="500"
+                    allowtransparency="true" frameborder="0"
+                    sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts">
+                </iframe>
+            </p>
+        </section>
+        <section id="about">
+        </section>
+    </main>
+    <footer></footer>
+</body>
+
+</html>

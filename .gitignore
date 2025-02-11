@@ -2,3 +2,6 @@
 package-lock.json
 **.js
 **.d.ts
+./cache.json
+**.css
+**.css.map

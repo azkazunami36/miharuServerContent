@@ -4,44 +4,52 @@ import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 
-// このmain.tsはwww.miharu.blog/serverContent/main.tsという位置にあります。そしてクライアントはserverContent以降にアクセスできません。
+const cacheData: {
+    miharuBlogRepositoryFolderPath: string;
+} = (() => {
+    if (fs.existsSync("./cache.json")) {
+        const json = JSON.parse(fs.readFileSync("./cache.json", "utf-8"));
+        if (json.miharuBlogRepositoryFolderPath && json.miharuBlogRepositoryFolderPath[json.miharuBlogRepositoryFolderPath.length - 1] === "/" && fs.existsSync(json.miharuBlogRepositoryFolderPath)) {
+            return json;
+        } else {
+            throw new Error("cache.json is invalid.");
+        }
+    } else {
+        throw new Error("No cache.json found.");
+    }
+})();
 
-/**
- * ブログのタイトル、投稿日時などの情報が記録されたJSONの保存場所です。www.miharu.blog/blogInfo.jsonという位置です。
- */
-const blogInfoJSONPath = "../blogInfo.json";
-/**
- * ジャンルの説明が記録されたJSONの保存場所です。www.miharu.blog/genreExplanation.jsonという位置です。
- */
-const genreExplanationJSONPath = "../genreExplanation.json";
-/**
- * ブログのメインデータ、記事内容と写真、動画などのメディアデータが格納されたフォルダです。www.miharu.blog/markdownSourceという位置です。構造は
- * ```txt
- * markdownSource
- * -> 0.md
- * -> 1.md
- * -> *.md
- * -> 0 // フォルダ
- *    -> * // メディアソース
- * -> * // フォルダ
- *    -> * // メディアソース
- * ```
- */
-const markdownSourceFolderPath = "../markdownSource";
-/**
- * あまり記事とは関係ないが、サイトを表示するうえで利用する写真の配置位置です。www.miharu.blog/imageSourceという位置です。
- */
-const imageSource = "../imageSource";
+// miharu-blog内の消してはならないファイルまたはフォルダ
+const miharuBlogImportantFiles = [
+    "CNAME",
+    "LICENSE",
+    ".git",
+    "manifest.json",
+    "ads.txt",
+];
+
+// cacheData.miharuBlogRepositoryFolderPathから必要なファイル以外すべてを削除する。削除するものがフォルダである場合を考慮する。
+function deleteUnnecessaryFiles() {
+    const files = fs.readdirSync(cacheData.miharuBlogRepositoryFolderPath);
+    for (const file of files) {
+        if (!miharuBlogImportantFiles.includes(file)) {
+            const path = cacheData.miharuBlogRepositoryFolderPath + "/" + file;
+            if (fs.statSync(path).isDirectory()) {
+                fs.rmSync(path, { recursive: true });
+            } else {
+                fs.unlinkSync(path);
+            }
+        }
+    }
+}
+deleteUnnecessaryFiles();
+
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
-const headerSharePath = "./headerShare.html";
-
-function getHeaderShare() {
-    return fs.readFileSync(headerSharePath, "utf-8");
-}
+function getHeaderShare() { return fs.readFileSync("./templateHTML/headerShare.html", "utf-8"); };
 
 function getBlogInfoJSON() {
-    return JSON.parse(fs.readFileSync(blogInfoJSONPath, "utf-8")) as {
+    return JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8")) as {
         type: "normal";
         title: string;
         timestamp: string; // YYYY/MM/DD
@@ -56,7 +64,7 @@ function getBlogInfoJSON() {
 }
 
 function getGenreExplanationJSON() {
-    return JSON.parse(fs.readFileSync(genreExplanationJSONPath, "utf-8")) as {
+    return JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8")) as {
         [genre: string]: {
             alt: string;
             reading: string[];
@@ -97,7 +105,21 @@ function createOGPrefix(info: {
 }
 
 function writeFileSyncCRLF(path: string, data: string) {
-    fs.writeFileSync(path, data.replace(/\r?\n/g, "\r\n"), "utf-8");
+    // ファイルを書き込む前に、フォルダが存在するかを確認する。存在しない場合はその名前のフォルダを作成(入れ子フォルダである場合も考慮)。パスがファイル名だけである場合はスキップ。
+    const pathArray = path.split("/");
+    pathArray.pop();
+    const dirPath = cacheData.miharuBlogRepositoryFolderPath + pathArray.join("/");
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+
+    const Path = cacheData.miharuBlogRepositoryFolderPath + path;
+
+    if (fs.existsSync(Path)) {
+        if (fs.readFileSync(Path, "utf-8") !== data) {
+            fs.writeFileSync(Path, data.replace(/\r?\n/g, "\r\n"), "utf-8");
+        }
+    } else {
+        fs.writeFileSync(Path, data.replace(/\r?\n/g, "\r\n"), "utf-8");
+    };
 }
 
 async function convert() {
@@ -105,7 +127,7 @@ async function convert() {
      * index.htmlの作成
      */
     async function createIndexHTML() {
-        const dom = new JSDOM(fs.readFileSync("./homepate.html", "utf-8"));
+        const dom = new JSDOM(fs.readFileSync("./templateHTML/homepate.html", "utf-8"));
         const document = dom.window.document;
 
         // headタグにogPrefixを追加
@@ -124,7 +146,11 @@ async function convert() {
 
         // headerの内容を設定
         const header = document.getElementsByTagName("header")[0];
-        if (header) header.innerHTML = fs.readFileSync("./header.html", "utf-8");
+        if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
+
+        // footerの内容を設定
+        const footer = document.getElementsByTagName("footer")[0];
+        if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
 
         const blogInfo = getBlogInfoJSON();
         const genreExplanation = getGenreExplanationJSON();
@@ -143,7 +169,7 @@ async function convert() {
         })();
         for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
             const info = blogInfo[i];
-            const markdownText = fs.readFileSync(markdownSourceFolderPath + "/" + i + ".md", "utf-8");
+            const markdownText = fs.readFileSync("./markdownSource/" + i + "/" + i + ".md", "utf-8");
             const li = document.createElement("li");
             if (!info.created) li.classList.add("nocreated");
             if (info.incomplete) li.classList.add("incomplete");
@@ -153,7 +179,7 @@ async function convert() {
             rightDiv.classList.add("right");
             const title = document.createElement("p");
             const link = document.createElement("a");
-            link.href = "https://www.miharu.blog/htmlBlogSource/" + i + ".html";
+            link.href = "./" + blogInfo[i].genre + "/" + i + "/";
             link.innerHTML = info.title;
             title.appendChild(link);
             leftDiv.appendChild(title);
@@ -163,7 +189,7 @@ async function convert() {
             textBox.classList.add("textBox");
             if (info.topImageName) {
                 const img = document.createElement("img");
-                img.src = "./markdownSource/" + i + "/" + info.topImageName;
+                img.src = "./" + blogInfo[i].genre + "/" + i + "/" + info.topImageName;
                 rightDiv.appendChild(img);
             }
             if (markdownText) {
@@ -248,31 +274,23 @@ async function convert() {
         }
 
         const about = document.getElementById("about");
-        if (about) about.innerHTML = await marked(fs.readFileSync("../markdownSource/aboutSite.md", "utf-8"));
+        if (about) about.innerHTML = await marked(fs.readFileSync("./markdownSource/aboutSite.md", "utf-8"));
 
         const blogQuantity = document.getElementById("blogQuantity");
         if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
 
         const text = dom.serialize();
-        const savePath = "../index.html";
 
-        // 内容が一致しなかったら保存
-        if (fs.existsSync(savePath)) {
-            if (fs.readFileSync(savePath, "utf-8") !== text) {
-                writeFileSyncCRLF(savePath, text);
-            }
-        } else {
-            writeFileSyncCRLF(savePath, text);
-        }
+        writeFileSyncCRLF("index.html", text);
     }
     // 記事毎のHTMLを作成する関数
     async function createBlogHTML() {
         const blogInfo = getBlogInfoJSON();
         for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
-            const dom = new JSDOM(fs.readFileSync("./blogView.html", "utf-8"));
+            const dom = new JSDOM(fs.readFileSync("./templateHTML/blogView.html", "utf-8"));
             const document = dom.window.document;
 
-            const markdownText = fs.readFileSync(markdownSourceFolderPath + "/" + i + ".md", "utf-8");
+            const markdownText = fs.readFileSync("./markdownSource/" + i + "/" + i + ".md", "utf-8");
 
             // headタグにogPrefixを追加
             document.head.setAttribute("prefix", ogPrefix);
@@ -281,8 +299,8 @@ async function convert() {
             document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
                 title: blogInfo[i].title,
                 description: (await marked(markdownText.split("\n")[0])).replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ''),
-                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/markdownSource/" + i + "/" + blogInfo[i].topImageName : undefined,
-                url: "https://www.miharu.blog/htmlBlogSource/" + i + ".html",
+                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/" + blogInfo[i].topImageName : undefined,
+                url: "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/",
                 siteName: "みはるのホームページ",
                 twitterCard: "summary_large_image"
             });
@@ -302,7 +320,11 @@ async function convert() {
 
             // headerの内容を設定
             const header = document.getElementsByTagName("header")[0];
-            if (header) header.innerHTML = fs.readFileSync("./header.html", "utf-8");
+            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
+
+            // footerの内容を設定
+            const footer = document.getElementsByTagName("footer")[0];
+            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
 
             const fragment = document.createDocumentFragment();
             const title = document.createElement("h1");
@@ -342,7 +364,7 @@ async function convert() {
                 const img = document.createElement("img");
                 img.id = "topImage";
                 img.classList.add("ignorePreview");
-                img.src = "../markdownSource/" + i + "/" + blogInfo[i].topImageName;
+                img.src = "./" + blogInfo[i].topImageName;
                 p.appendChild(img);
                 fragment.appendChild(p);
             }
@@ -457,15 +479,18 @@ async function convert() {
             if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
 
             const text = dom.serialize();
-            const savePath = "../htmlBlogSource/" + i + ".html";
 
-            // 内容が一致しなかったら保存
-            if (fs.existsSync(savePath)) {
-                if (fs.readFileSync(savePath, "utf-8") !== text) {
-                    writeFileSyncCRLF(savePath, text);
+            writeFileSyncCRLF(blogInfo[i].genre + "/" + i + "/index.html", text);
+
+            // markdownSource[i]フォルダに入っているデータをコピー(あれば)
+            if (fs.existsSync("./markdownSource/" + i)) {
+                if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i)) {
+                    fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i);
                 }
-            } else {
-                writeFileSyncCRLF(savePath, text);
+                const files = fs.readdirSync("./markdownSource/" + i);
+                for (const file of files) {
+                    fs.writeFileSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i + "/" + file, fs.readFileSync("./markdownSource/" + i + "/" + file));
+                }
             }
         }
     }
@@ -473,21 +498,41 @@ async function convert() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
         const blogInfo = getBlogInfoJSON();
         let siteMap = baseSiteMap;
-        for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
-            siteMap += "https://www.miharu.blog/htmlBlogSource/" + i + ".html\n";
-        }
-        const savePath = "../sitemap.txt";
-        if (fs.existsSync(savePath)) {
-            if (fs.readFileSync(savePath, "utf-8") !== siteMap) {
-                writeFileSyncCRLF(savePath, siteMap);
+        for (let i = 0; i !== Object.keys(blogInfo).length; i++) siteMap += "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/\n";
+        writeFileSyncCRLF("sitemap.txt", siteMap);
+    }
+
+    async function srcFolderCreate() {
+        function copyFiles(srcPath: fs.PathLike, destPath: string) {
+            const files = fs.readdirSync(srcPath);
+            for (const file of files) {
+                const srcFile = `${srcPath}/${file}`;
+                const destFile = `${destPath}/${file}`;
+                if (fs.statSync(srcFile).isDirectory()) {
+                    if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + destFile)) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + destFile);
+                    copyFiles(srcFile, destFile);
+                } else {
+                    // .d.tsとts、scss、css.mapファイルを除外してコピー
+                    if (!(file.match(/\.d\.ts$/) || file.match(/\.ts$/) || file.match(/\.scss$/) || file.match(/\.css\.map$/))) {
+                        fs.writeFileSync(cacheData.miharuBlogRepositoryFolderPath + destFile, fs.readFileSync(srcFile));
+                    };
+                }
             }
-        } else {
-            writeFileSyncCRLF(savePath, siteMap);
+        }
+        if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img", { recursive: true });
+
+        copyFiles("./src", "src");
+        copyFiles("./imageSource", "src/img");
+
+        // imageSourceフォルダをsrc/imgにコピー
+        if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) {
+            fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img");
         };
     }
     await createIndexHTML();
     await createBlogHTML();
     await createSiteMapTxt();
+    await srcFolderCreate();
 }
 
 convert();
