@@ -494,6 +494,34 @@ async function convert() {
             }
         }
     }
+
+    async function createGenreRootHTML() {
+        const genres = Object.keys(getGenreExplanationJSON());
+
+        for (const genreName of genres) {
+            const dom = new JSDOM(fs.readFileSync("./templateHTML/genreRootHtml.html", "utf-8"));
+            const document = dom.window.document;
+
+            // headタグにogPrefixを追加
+            document.head.setAttribute("prefix", ogPrefix);
+
+            // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
+            document.head.innerHTML = getHeaderShare() + document.head.innerHTML;
+
+            document.title = genreName + " - miharu";
+
+            // headerの内容を設定
+            const header = document.getElementsByTagName("header")[0];
+            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
+
+            // footerの内容を設定
+            const footer = document.getElementsByTagName("footer")[0];
+            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
+
+        }
+
+    }
+
     async function createSiteMapTxt() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
         const blogInfo = getBlogInfoJSON();
