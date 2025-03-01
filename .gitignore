@@ -5,3 +5,4 @@ package-lock.json
 ./cache.json
 **.css
 **.css.map
+.DS_Store
