@@ -46,10 +46,13 @@ deleteUnnecessaryFiles();
 
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
-function getHeaderShare() { return fs.readFileSync("./templateHTML/headerShare.html", "utf-8"); };
 
+let headerShareTemp;
+function getHeaderShare() { if (!headerShareTemp) headerShareTemp = fs.readFileSync("./templateHTML/headerShare.html", "utf-8"); return headerShareTemp; };
+
+let blogInfoJSONTemp;
 function getBlogInfoJSON() {
-    return JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8")) as {
+    if (!blogInfoJSONTemp) blogInfoJSONTemp = JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8")) as {
         type: "normal";
         title: string;
         timestamp: string; // YYYY/MM/DD
@@ -61,15 +64,18 @@ function getBlogInfoJSON() {
         topImageName?: string;
         htmlBlogSourceIs?: boolean;
     }[];
+    return blogInfoJSONTemp;
 }
 
+let genreExplanationJSONTemp;
 function getGenreExplanationJSON() {
-    return JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8")) as {
+    if (!genreExplanationJSONTemp) genreExplanationJSONTemp = JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8")) as {
         [genre: string]: {
             alt: string;
             reading: string[];
         };
     };
+    return genreExplanationJSONTemp;
 }
 
 // ogp(twitter埋め込みなど)に関するheadタグのprefixを作成する関数
