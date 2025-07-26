@@ -6,6 +6,19 @@
     <link rel="stylesheet" href="../../src/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/a11y-dark.css">
     <script src="../../src/imagePreviewScript.js"></script>
+    <script>
+        addEventListener("load", () => {
+            function ratioReplace(src, width, height) { return src.replace(/@\d+x\d+-\d+x.webp/, "@" + width + "x" + height + "-" + Math.ceil((window.devicePixelRatio <= 8 ? window.devicePixelRatio : 8) || 1) + "x.webp"); }
+
+            const content = document.getElementById("content");
+            const imgs = content.querySelectorAll("img");
+            for (const img of imgs) {
+                img.src = ratioReplace(img.src, 850, 400);
+                img.addEventListener("mouseover", () => { img.src = ratioReplace(img.src, 850, 400); });
+                img.addEventListener("touchstart", () => { img.src = ratioReplace(img.src, 850, 400); });
+            }
+        })
+    </script>
 </head>
 
 <body>

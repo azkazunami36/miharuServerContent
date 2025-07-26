@@ -4,6 +4,23 @@
 <head>
     <title>みはるのホームページ - miharu</title>
     <link rel="stylesheet" href="./src/style.css">
+    <script>
+        addEventListener("load", () => {
+            function ratioReplace(src, width, height) { return src.replace(/@\d+x\d+-\d+x.webp/, "@" + width + "x" + height + "-" + Math.ceil((window.devicePixelRatio <= 8 ? window.devicePixelRatio : 8) || 1) + "x.webp"); }
+
+            const topHomeImage = document.getElementById("topHomeImage");
+            topHomeImage.src = ratioReplace(topHomeImage.src, 850, 400);
+            topHomeImage.addEventListener("mouseover", () => { topHomeImage.src = ratioReplace(topHomeImage.src, 850, 400); });
+            topHomeImage.addEventListener("touchstart", () => { topHomeImage.src = ratioReplace(topHomeImage.src, 850, 400); });
+
+            const blogListImages = document.getElementById("blogListUL").querySelectorAll("img");
+            for (const blogListImage of blogListImages) {
+                blogListImage.src = ratioReplace(blogListImage.src, 75, 75);
+                blogListImage.addEventListener("mouseover", () => { blogListImage.src = ratioReplace(blogListImage.src, 75, 75); });
+                blogListImage.addEventListener("touchstart", () => { blogListImage.src = ratioReplace(blogListImage.src, 75, 75); });
+            }
+        });
+    </script>
 </head>
 
 <body>
@@ -11,6 +28,8 @@
     <main>
         <section id="description">
             <h1>みはるのホームページ</h1>
+            <img id="topHomeImage" style="width: 100%; object-fit: contain; border-radius: 10px; overflow: hidden;"
+                src="./src/img/homepage.png" alt="ホームページの画像">
             <p>ここは貧乏学生が知識を無料で売るために作ったサイトです。</p>
             <p>記事やイラスト、小説を主に見ることができます。ほかにも漫画などを見ることができるようなホームページになるよう、このサイトは日々更新していきたいと思います！</p>
         </section>

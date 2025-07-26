@@ -53,9 +53,14 @@ addEventListener("load", () => {
                     this.viewElement.setAttribute("data-viewed", "false");
                 };
             }
-            this.resize = () => {
-                img.style.maxWidth = images[this.nowViewed].naturalWidth / window.devicePixelRatio + "px";
-                img.style.maxHeight = images[this.nowViewed].naturalHeight / window.devicePixelRatio + "px";
+            this.resize = async () => {
+                // 読み込みが完了していなかったら読み込みを待つ
+                if (img.naturalWidth === 0) {
+                    await new Promise(resolve => img.onload = resolve);
+                }
+
+                img.style.maxWidth = img.naturalWidth / window.devicePixelRatio + "px";
+                img.style.maxHeight = img.naturalHeight / window.devicePixelRatio + "px";
             }
             addEventListener("resize", this.resize);
             this.close = () => {
@@ -88,7 +93,7 @@ addEventListener("load", () => {
             this.refleshView = () => {
                 if (this.nowViewed === 0) leftIcon.style.opacity = "0.5"; else leftIcon.style.opacity = "1";
                 if (this.nowViewed === images.length - 1) rightIcon.style.opacity = "0.5"; else rightIcon.style.opacity = "1";
-                img.src = images[this.nowViewed].src;
+                img.src = images[this.nowViewed].dataset.original || images[this.nowViewed].src;
 
                 this.resize();
                 status.innerText = "ページ(" + (this.nowViewed + 1) + "/" + (images.length) + ")" + (images[this.nowViewed].alt ? " - " + images[this.nowViewed].alt : "");

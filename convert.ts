@@ -3,6 +3,8 @@ import { marked } from "marked";
 import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
+import sharp from "sharp";
+import os from "os";
 
 const cacheData: {
     miharuBlogRepositoryFolderPath: string;
@@ -26,6 +28,7 @@ const miharuBlogImportantFiles = [
     ".git",
     "manifest.json",
     "ads.txt",
+    "robots.txt",
 ];
 
 // cacheData.miharuBlogRepositoryFolderPathから必要なファイル以外すべてを削除する。削除するものがフォルダである場合を考慮する。
@@ -42,7 +45,6 @@ function deleteUnnecessaryFiles() {
         }
     }
 }
-deleteUnnecessaryFiles();
 
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
@@ -76,6 +78,11 @@ function getGenreExplanationJSON() {
         };
     };
     return genreExplanationJSONTemp;
+}
+
+function removeEscapedCharacters(url: string): string {
+    // 正規表現を使用してエスケープされる記号をすべて取り除く
+    return url.replace(/[!#$&'()*+,/:;=?@[\]]/g, '');
 }
 
 // ogp(twitter埋め込みなど)に関するheadタグのprefixを作成する関数
@@ -129,6 +136,7 @@ function writeFileSyncCRLF(path: string, data: string) {
 }
 
 async function convert() {
+    if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img", { recursive: true });
     /**
      * index.htmlの作成
      */
@@ -158,6 +166,20 @@ async function convert() {
         const footer = document.getElementsByTagName("footer")[0];
         if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
 
+        const topHomeImage = (document.getElementById("topHomeImage") as HTMLImageElement);
+        const imageSrc = "./imageSource/homepage.png";
+        const width = 850;
+        const height = 400;
+
+        if (topHomeImage) {
+            for (let scale = 1; scale <= 8; scale++) {
+                const path = "src/img/homepage@850x400-" + scale + "x.webp";
+                if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + path)) sharp(imageSrc).rotate().resize(Math.floor(width * scale), Math.floor(height * scale)).webp({ quality: 100 }).toFile(cacheData.miharuBlogRepositoryFolderPath + path);
+            }
+            // 初期値を1xに設定
+            topHomeImage.src = "src/img/homepage@850x400-1x.webp";
+        }
+
         const blogInfo = getBlogInfoJSON();
         const genreExplanation = getGenreExplanationJSON();
         const blogListUL = (() => {
@@ -185,7 +207,7 @@ async function convert() {
             rightDiv.classList.add("right");
             const title = document.createElement("p");
             const link = document.createElement("a");
-            link.href = "./" + blogInfo[i].genre + "/" + i + "/";
+            link.href = "./" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/";
             link.innerHTML = info.title;
             title.appendChild(link);
             leftDiv.appendChild(title);
@@ -195,8 +217,16 @@ async function convert() {
             textBox.classList.add("textBox");
             if (info.topImageName) {
                 const img = document.createElement("img");
-                img.src = "./" + blogInfo[i].genre + "/" + i + "/" + info.topImageName;
+                img.src = "./" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + info.topImageName;
                 rightDiv.appendChild(img);
+
+                // 75x75のwebpサムネイルを作成(1xから8xまで)
+                const image = sharp("./markdownSource/" + i + "/" + info.topImageName);
+                for (let scale = 1; scale <= 8; scale++) {
+                    const path = "src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + info.topImageName) + "@75x75-" + scale + "x.webp";
+                    if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + path)) image.rotate().resize(Math.floor(75 * scale), Math.floor(75 * scale)).webp({ quality: 100 }).toFile(cacheData.miharuBlogRepositoryFolderPath + path);
+                }
+                img.src = "src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + info.topImageName) + "@75x75-1x.webp";
             }
             if (markdownText) {
                 const blogContent = document.createElement("span");
@@ -305,8 +335,8 @@ async function convert() {
             document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
                 title: blogInfo[i].title,
                 description: (await marked(markdownText.split("\n")[0])).replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ''),
-                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/" + blogInfo[i].topImageName : undefined,
-                url: "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/",
+                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + blogInfo[i].topImageName : undefined,
+                url: "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/",
                 siteName: "みはるのホームページ",
                 twitterCard: "summary_large_image"
             });
@@ -479,23 +509,63 @@ async function convert() {
                 };
             } else indexBox.style.display = "none";
             const content = document.getElementById("content");
-            if (content) content.appendChild(fragment);
+            if (content) {
+                content.appendChild(fragment);
+                // コンテンツ内のimgを全て取得
+                const imgs = content.querySelectorAll("img");
+                for (const img of imgs) {
+                    const image = sharp("./markdownSource/" + i + "/" + img.src);
+                    // 850x400を基準にリサイズする(アスペクト比を維持)
+                    function isImageRotated(metadata: sharp.Metadata): boolean {
+                        const orientation = metadata.orientation;
+                    
+                        // EXIFのOrientationタグに基づいて回転を判定
+                        // 1: オリジナル
+                        // 3: 180度回転
+                        // 6: 90度回転
+                        // 8: 270度回転
+                        if (orientation === 6 || orientation === 8) {
+                            return true; // 回転されている
+                        } else if (orientation === 3) {
+                            return false; // 上下逆
+                        } else {
+                            return false; // オリジナル回転
+                        }
+                    }
+                    const metadata = await image.metadata();
+                    const width = isImageRotated(metadata) ? metadata.height : metadata.width;
+                    const height = isImageRotated(metadata) ? metadata.width : metadata.height;
+                    if (width && height) {
+                        const [resizeToWidth, resizeToHeight] = width > 850 || height > 400 ? (width / height > 850 / 400 ? [850, 850 * height / width] : [400 * width / height, 400]) : [width, height];
+                        for (let scale = 1; scale <= 8; scale++) {
+                            const path = "src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-" + scale + "x.webp";
+                            if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + path)) image.rotate().resize(Math.floor(resizeToWidth), Math.floor(resizeToHeight)).webp({ quality: 100 }).toFile(cacheData.miharuBlogRepositoryFolderPath + path);                        
+                        }
+                        // オリジナルURLを記録しておく
+                        img.dataset.original = img.src;
+                        
+                        // スケーリング済み画像を設定する
+                        img.src = "../../src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-1x.webp";
+                    }
+                }
+            }
+
 
             const blogQuantity = document.getElementById("blogQuantity");
             if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
 
             const text = dom.serialize();
 
-            writeFileSyncCRLF(blogInfo[i].genre + "/" + i + "/index.html", text);
+            writeFileSyncCRLF(blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/index.html", text);
 
             // markdownSource[i]フォルダに入っているデータをコピー(あれば)
             if (fs.existsSync("./markdownSource/" + i)) {
-                if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i)) {
-                    fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i);
+                if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title))) {
+                    fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title));
                 }
                 const files = fs.readdirSync("./markdownSource/" + i);
                 for (const file of files) {
-                    fs.writeFileSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + i + "/" + file, fs.readFileSync("./markdownSource/" + i + "/" + file));
+                    fs.writeFileSync(cacheData.miharuBlogRepositoryFolderPath + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + file, fs.readFileSync("./markdownSource/" + i + "/" + file));
                 }
             }
         }
@@ -532,7 +602,7 @@ async function convert() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
         const blogInfo = getBlogInfoJSON();
         let siteMap = baseSiteMap;
-        for (let i = 0; i !== Object.keys(blogInfo).length; i++) siteMap += "https://www.miharu.blog/" + blogInfo[i].genre + "/" + i + "/\n";
+        for (let i = 0; i !== Object.keys(blogInfo).length; i++) siteMap += "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/\n";
         writeFileSyncCRLF("sitemap.txt", siteMap);
     }
 
