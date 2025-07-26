@@ -4,20 +4,24 @@ import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 import sharp from "sharp";
-import os from "os";
 
 const cacheData: {
+    /**
+     * ブログデータのインストール先を`cache.json`に入力してください。絶対パスである必要があります。
+     */
     miharuBlogRepositoryFolderPath: string;
 } = (() => {
     if (fs.existsSync("./cache.json")) {
-        const json = JSON.parse(fs.readFileSync("./cache.json", "utf-8"));
+        const json = JSON.parse(fs.readFileSync("./cache.json", "utf-8")) as {
+            miharuBlogRepositoryFolderPath: string;
+        };
         if (json.miharuBlogRepositoryFolderPath && json.miharuBlogRepositoryFolderPath[json.miharuBlogRepositoryFolderPath.length - 1] === "/" && fs.existsSync(json.miharuBlogRepositoryFolderPath)) {
             return json;
         } else {
-            throw new Error("cache.json is invalid.");
+            throw new Error("cache.jsonの内容が正しくありません。");
         }
     } else {
-        throw new Error("No cache.json found.");
+        throw new Error("cache.jsonを見つけることができませんでした。");
     }
 })();
 
@@ -48,11 +52,21 @@ function deleteUnnecessaryFiles() {
 
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
-
-let headerShareTemp;
+let headerShareTemp: String;
 function getHeaderShare() { if (!headerShareTemp) headerShareTemp = fs.readFileSync("./templateHTML/headerShare.html", "utf-8"); return headerShareTemp; };
 
-let blogInfoJSONTemp;
+let blogInfoJSONTemp: {
+    type: "normal";
+    title: string;
+    timestamp: string; // YYYY/MM/DD
+    editTimestamp?: string; // YYYY/MM/DD
+    genre: string;
+    keyword: string[];
+    created: boolean;
+    incomplete: boolean;
+    topImageName?: string;
+    htmlBlogSourceIs?: boolean;
+}[];
 function getBlogInfoJSON() {
     if (!blogInfoJSONTemp) blogInfoJSONTemp = JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8")) as {
         type: "normal";
@@ -69,7 +83,12 @@ function getBlogInfoJSON() {
     return blogInfoJSONTemp;
 }
 
-let genreExplanationJSONTemp;
+let genreExplanationJSONTemp: {
+    [genre: string]: {
+        alt: string;
+        reading: string[];
+    }
+};
 function getGenreExplanationJSON() {
     if (!genreExplanationJSONTemp) genreExplanationJSONTemp = JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8")) as {
         [genre: string]: {
@@ -117,6 +136,10 @@ function createOGPrefix(info: {
     ${domain ? `<meta name="twitter:domain" content="${domain}">` : ""}`;
 }
 
+/**
+ * ファイルを書き込みます。改行コードを全てCRLFに変換します。
+ * パスには相対パスを入力してください。
+ */
 function writeFileSyncCRLF(path: string, data: string) {
     // ファイルを書き込む前に、フォルダが存在するかを確認する。存在しない場合はその名前のフォルダを作成(入れ子フォルダである場合も考慮)。パスがファイル名だけである場合はスキップ。
     const pathArray = path.split("/");
@@ -135,6 +158,9 @@ function writeFileSyncCRLF(path: string, data: string) {
     };
 }
 
+/**
+ * メイン処理
+ */
 async function convert() {
     if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img", { recursive: true });
     /**
@@ -518,7 +544,7 @@ async function convert() {
                     // 850x400を基準にリサイズする(アスペクト比を維持)
                     function isImageRotated(metadata: sharp.Metadata): boolean {
                         const orientation = metadata.orientation;
-                    
+
                         // EXIFのOrientationタグに基づいて回転を判定
                         // 1: オリジナル
                         // 3: 180度回転
@@ -539,11 +565,11 @@ async function convert() {
                         const [resizeToWidth, resizeToHeight] = width > 850 || height > 400 ? (width / height > 850 / 400 ? [850, 850 * height / width] : [400 * width / height, 400]) : [width, height];
                         for (let scale = 1; scale <= 8; scale++) {
                             const path = "src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-" + scale + "x.webp";
-                            if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + path)) image.rotate().resize(Math.floor(resizeToWidth), Math.floor(resizeToHeight)).webp({ quality: 100 }).toFile(cacheData.miharuBlogRepositoryFolderPath + path);                        
+                            if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + path)) image.rotate().resize(Math.floor(resizeToWidth), Math.floor(resizeToHeight)).webp({ quality: 100 }).toFile(cacheData.miharuBlogRepositoryFolderPath + path);
                         }
                         // オリジナルURLを記録しておく
                         img.dataset.original = img.src;
-                        
+
                         // スケーリング済み画像を設定する
                         img.src = "../../src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-1x.webp";
                     }
@@ -571,6 +597,10 @@ async function convert() {
         }
     }
 
+    /**
+     * ジャンルごとの説明に関するページHTMLを作成します。
+     * 現在未完成
+     */
     async function createGenreRootHTML() {
         const genres = Object.keys(getGenreExplanationJSON());
 
@@ -593,11 +623,13 @@ async function convert() {
             // footerの内容を設定
             const footer = document.getElementsByTagName("footer")[0];
             if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
-
         }
 
     }
 
+    /**
+     * サイトマップテキストファイルを作成します。
+     */
     async function createSiteMapTxt() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
         const blogInfo = getBlogInfoJSON();
@@ -606,7 +638,14 @@ async function convert() {
         writeFileSyncCRLF("sitemap.txt", siteMap);
     }
 
+    /**
+     * ソースフォルダの内容を全てコピーします。
+     */
     async function srcFolderCreate() {
+        /**
+         * フォルダ内ファイルをコピーします。フォルダ内も含め全てコピーします。特殊ファイルを除外します。
+         * 移動元パスをsrcに、移動先パスをdestにしてください。どちらともフォルダである必要があります。
+         */
         function copyFiles(srcPath: fs.PathLike, destPath: string) {
             const files = fs.readdirSync(srcPath);
             for (const file of files) {
