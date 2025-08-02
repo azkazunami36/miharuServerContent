@@ -332,5 +332,27 @@
         ],
         "created": false,
         "incomplete": false
+    },
+    {
+        "type": "normal",
+        "title": "オリキャラ作ってみた！(ポータル)",
+        "timestamp": "2025/8/2",
+        "genre": "Novel",
+        "keyword": [
+            "original",
+            "novel"
+        ],
+        "created": true,
+        "incomplete": false
+    },
+    {
+        "type": "normal",
+        "title": "高木さんとか高橋李依さんについての僕の日記的な",
+        "timestamp": "2025/8/3",
+        "genre": "Novel",
+        "keyword": [
+        ],
+        "created": true,
+        "incomplete": false
     }
 ]

@@ -33,6 +33,7 @@ const miharuBlogImportantFiles = [
     "manifest.json",
     "ads.txt",
     "robots.txt",
+    ".gitignore"
 ];
 
 // cacheData.miharuBlogRepositoryFolderPathから必要なファイル以外すべてを削除する。削除するものがフォルダである場合を考慮する。
@@ -404,6 +405,7 @@ async function convert() {
                     let string = "";
                     const array: string[] = [];
                     const keyword = blogInfo[i].keyword;
+                    if (keyword.length <= 0) return "";
                     array.push("タグ: " + keyword.pop());
                     array.push(...blogInfo[i].keyword);
                     for (const str of array) {
