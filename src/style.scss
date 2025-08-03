@@ -16,7 +16,7 @@ body {
 }
 
 a {
-    word-wrap:break-word;
+    word-wrap: break-word;
 }
 
 @keyframes viewedChangeOn {
@@ -316,6 +316,113 @@ main {
             object-fit: cover;
         }
 
+        div#twitterProfileEmbed:hover {
+            background: rgb(247, 249, 249);
+        }
+
+        div#twitterProfileEmbed:active {
+            background: rgba(230, 236, 240, 0.7);
+        }
+
+        div#twitterProfileEmbed {
+            max-width: 550px;
+            margin: auto;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #cfd9de;
+            background: white;
+            color: black;
+            transition: .2s;
+
+            a {
+                display: block;
+                color: black;
+                text-decoration: none;
+                padding-bottom: 15px;
+            }
+
+            #background {
+                position: absolute;
+            }
+
+            #front {
+                position: relative;
+
+                img {
+                    max-width: 150px;
+                    width: 25%;
+                    border-radius: 99999px;
+                    border: 6px solid rgb(255, 255, 255);
+                    margin: 100px 10px 0px 10px;
+                }
+
+                #nickname {
+                    margin: 0px 20px;
+                    font-size: 1.4em;
+                    font-weight: 600;
+                }
+
+                #handle {
+                    margin: 0px 20px;
+                    color: rgb(113 118 122);
+                }
+
+                #followData {
+                    display: flex;
+                    margin: 10px 20px 0 20px;
+
+                    #following {
+                        font-weight: 900;
+                        margin: 0 5px 0 0;
+                    }
+
+                    #followingText {
+                        color: rgb(113 118 122);
+                        margin: 0 20px 0 0;
+                    }
+
+                    #follower {
+                        font-weight: 900;
+                        margin: 0 5px 0 0;
+                    }
+
+                    #followerText {
+                        color: rgb(113 118 122);
+                    }
+                }
+
+                #description {
+                    margin: 10px 20px 0;
+                }
+
+                button {
+                    border: 1px solid rgb(207 217 222);
+                    background: rgba(0, 111, 214, 0);
+                    color: rgb(1 111 214);
+                    font-weight: 900;
+                    width: calc(100% - 30px);
+                    height: 35px;
+                    margin: auto;
+                    display: block;
+                    border-radius: 99px;
+                    transition: .2s;
+                }
+
+                button:hover {
+                    background: rgba(0, 111, 214, 0.1);
+                }
+
+                #createTimeStamp {
+                    color: rgb(113, 118, 122);
+                    font-size: 0.7em;
+                    display: block;
+                    text-align: end;
+                    margin: 0px 20px 5px 0;
+                }
+            }
+        }
+
         code {
             top: -2px;
             position: relative;
@@ -558,6 +665,18 @@ footer {
                     span {
                         width: 100%;
                         justify-content: flex-end;
+                    }
+                }
+            }
+        }
+    }
+
+    main {
+        section {
+            div#twitterProfileEmbed {
+                #front {
+                    img {
+                        margin: 16vw 10px 0px 10px;
                     }
                 }
             }

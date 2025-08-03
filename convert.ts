@@ -1,10 +1,12 @@
 import fs from "fs";
-import { marked } from "marked";
+import { marked, use } from "marked";
 import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 import sharp from "sharp";
-import ytdl from "ytdl-core"
+import ytdl from "ytdl-core";
+import puppeteer from "puppeteer";
+import { DOMWindow } from "jsdom";
 
 const cacheData: {
     /**
@@ -165,6 +167,151 @@ function writeFileSyncCRLF(path: string, data: string) {
  */
 async function convert() {
     if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img", { recursive: true });
+
+    async function embedCreator(document: Document, content: HTMLElement, window: DOMWindow) {                // 全てのaタグ(リンク)を取得
+        const aTags = content.querySelectorAll("a");
+        for (const aTag of aTags) {
+            if (aTag.href.startsWith("https://youtu.be/") || aTag.href.startsWith("https://www.youtube.com/") || aTag.href.startsWith("https://youtube.com/")) {
+                try {
+                    const videoId = ytdl.getVideoID(aTag.href);
+                    aTag.parentElement?.insertAdjacentHTML("afterend", `<p><iframe id="youtubeiFrame" src="${"https://www.youtube.com/embed/" + videoId}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></p>`);
+                } catch (e) {
+                    try {
+                        const playlist = new URL(aTag.href).searchParams.get("list");
+                        const si = new URL(aTag.href).searchParams.get("si");
+                        aTag.parentElement?.insertAdjacentHTML("afterend", `<p><iframe id="youtubeiFrame" src="https://www.youtube.com/embed/videoseries?&amp;list=${playlist}${si ? "&si=" + si : ""}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></p>`);
+                    } catch (e) { }
+                }
+            } else if (aTag.href.startsWith("https://x.com/")) {
+                try {
+                    const slashSplit = aTag.href.split("/");
+                    const userId = slashSplit[3];
+                    const postId = slashSplit[5];
+                    if (postId === undefined) {
+                        const browser = await puppeteer.launch({
+                            headless: false,
+                            executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                        });
+                        const page = await browser.newPage();
+                        await page.goto(`https://x.com/${userId}`, { waitUntil: "networkidle2" });
+
+                        const output = await page.evaluate(() => {
+                            const displayName = document.querySelector('div[data-testid="UserName"] span')?.textContent || null;
+                            let handle = null;
+                            document.querySelectorAll('div[data-testid="UserName"] span').forEach(e => {
+                                if (e.textContent?.startsWith("@")) handle = e.textContent.slice(1, e.textContent.length);
+                            })
+                            const avatar = document.querySelector('img[src*="twimg.com/profile_images"]')?.getAttribute("src") || null;
+                            const bannerStyle = document.querySelector('div[style*="background-image"]')?.getAttribute("style") || null;
+                            let banner = null;
+                            if (bannerStyle) {
+                                const match = bannerStyle.match(/url\("(.+?)"\)/);
+                                banner = match ? match[1] : null;
+                            }
+                            const bio = document.querySelector('div[data-testid="UserDescription"]')?.textContent || null;
+                            const following = document.querySelector(`a[href="/${handle}/following"] span`)?.textContent || null;
+                            let followers = document.querySelector(`a[href="/${handle}/followers"] span`)?.textContent || null;
+                            if (!followers) {
+                                followers = document.querySelector(`a[href="/${handle}/verified_followers"] span`)?.textContent || null;
+                            }
+                            return {
+                                displayName,
+                                handle: handle,
+                                avatar: avatar?.replace(/_normal|_200x200/, ""),
+                                banner: banner?.replace(/\/\d+x\d+$/, ""),
+                                bio,
+                                followers,
+                                following
+                            };
+                        });
+                        const { displayName, avatar, banner, bio, followers, following } = output;
+                        await browser.close();
+                        if (!displayName || !avatar) continue;
+                        const embed = document.createElement("p");
+                        const mainEmbeddiv = document.createElement("div");
+                        mainEmbeddiv.id = "twitterProfileEmbed";
+                        const mainEmbed = document.createElement("a");
+                        mainEmbed.href = `https://x.com/${userId}`;
+                        mainEmbed.target = "_blank";
+                        const background = document.createElement("div");
+                        background.id = "background";
+                        const front = document.createElement("div");
+                        front.id = "front";
+                        mainEmbeddiv.appendChild(mainEmbed);
+                        embed.appendChild(mainEmbeddiv);
+                        mainEmbed.appendChild(background);
+                        mainEmbed.appendChild(front);
+
+                        const avatarIcon = document.createElement("img");
+                        avatarIcon.src = avatar;
+                        front.appendChild(avatarIcon);
+                        const nickname = document.createElement("div");
+                        nickname.id = "nickname";
+                        nickname.innerHTML = displayName;
+                        front.appendChild(nickname);
+                        const handle = document.createElement("div");
+                        handle.id = "handle";
+                        handle.innerHTML = "@" + userId;
+                        front.appendChild(handle);
+                        const description = document.createElement("div");
+                        description.id = "description";
+                        description.innerHTML = bio || "";
+                        front.appendChild(description);
+                        const followData = document.createElement("div");
+                        followData.id = "followData";
+                        const followingMain = document.createElement("div");
+                        followingMain.id = "following";
+                        followingMain.innerHTML = following || "読み取り失敗";
+                        followData.appendChild(followingMain);
+                        const followingText = document.createElement("div");
+                        followingText.id = "followingText";
+                        followingText.innerHTML = "フォロー中";
+                        followData.appendChild(followingText);
+                        const followerMain = document.createElement("div");
+                        followerMain.id = "follower";
+                        followerMain.innerHTML = followers || "読み取り失敗";
+                        followData.appendChild(followerMain);
+                        const followerText = document.createElement("div");
+                        followerText.id = "followerText";
+                        followerText.innerHTML = "フォロワー";
+                        followData.appendChild(followerText);
+                        front.appendChild(followData);
+                        const createTimeStamp = document.createElement("div");
+                        createTimeStamp.id = "createTimeStamp"; const today = new Date();
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, "0");
+                        const day = String(today.getDate()).padStart(2, "0");
+                        createTimeStamp.innerHTML = `${year}年${month}月${day}日当時のプロフィール`;
+                        front.appendChild(createTimeStamp);
+                        const button = document.createElement("button");
+                        button.id = "button";
+                        button.type = "button"
+                        button.innerHTML = "X.com で表示する";
+                        front.appendChild(button);
+                        const backImage = document.createElement("img");
+                        if (banner) backImage.src = banner;
+                        background.appendChild(backImage);
+
+                        aTag.parentElement?.insertAdjacentElement("afterend", embed);
+                        continue;
+                    }
+                    const data: { html: string } = await (await fetch("https://publish.twitter.com/oembed?url=https://twitter.com/" + userId + "/status/" + postId)).json();
+                    if (!data.html) {
+                        console.log("Invalid URL or error API. continue by" + userId + " & " + postId);
+                        continue;
+                    }
+                    const embed = (new JSDOM("<div>" + data.html + "</div>")).window.document.body.firstChild as HTMLElement;
+                    if (!embed) {
+                        console.log("invalid html. continue by" + userId + " & " + postId);
+                        continue;
+                    }
+                    aTag.parentElement?.insertAdjacentElement("afterend", embed);
+                    embed.id = "twitterEmbed";
+                } catch (e) { console.log(e) }
+            }
+        }
+    }
+
     /**
      * index.htmlの作成
      */
@@ -338,7 +485,10 @@ async function convert() {
         }
 
         const about = document.getElementById("about");
-        if (about) about.innerHTML = await marked(fs.readFileSync("./markdownSource/aboutSite.md", "utf-8"));
+        if (about) {
+            about.innerHTML = await marked(fs.readFileSync("./markdownSource/aboutSite.md", "utf-8"));
+            await embedCreator(document, about, dom.window);
+        }
 
         const blogQuantity = document.getElementById("blogQuantity");
         if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
@@ -577,34 +727,7 @@ async function convert() {
                         img.src = "../../src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-1x.webp";
                     }
                 }
-                // 全てのaタグ(リンク)を取得
-                const aTags = content.querySelectorAll("a");
-                for (const aTag of aTags) {
-                    if (aTag.href.startsWith("https://youtu.be/") || aTag.href.startsWith("https://www.youtube.com/") || aTag.href.startsWith("https://youtube.com/")) {
-                        try {
-                            const videoId = ytdl.getVideoID(aTag.href);
-                            aTag.parentElement?.insertAdjacentHTML("afterend", `<iframe id="youtubeiFrame" src="${"https://www.youtube.com/embed/" + videoId}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`);
-                        } catch (e) {
-                            try {
-                                const playlist = new URL(aTag.href).searchParams.get("list");
-                                const si = new URL(aTag.href).searchParams.get("si");
-                                aTag.parentElement?.insertAdjacentHTML("afterend", `<iframe id="youtubeiFrame" src="https://www.youtube.com/embed/videoseries?&amp;list=${playlist}${si ? "&si=" + si : ""}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`);
-                            } catch (e) { }
-                        }
-                    } else if (aTag.href.startsWith("https://x.com/")) {
-                        try {
-                            const slashSplit = aTag.href.split("/");
-                            const userId = slashSplit[3];
-                            const postId = slashSplit[5];
-                            const data: { html: string } = await (await fetch("https://publish.twitter.com/oembed?url=https://twitter.com/" + userId + "/status/" + postId)).json();
-                            if (!data.html) continue;
-                            const embed = (new JSDOM("<div>" + data.html + "</div>")).window.document.body.firstChild as HTMLElement;
-                            if (!embed) continue;
-                            aTag.insertAdjacentElement("afterend", embed);
-                            embed.id = "twitterEmbed";
-                        } catch (e) { }
-                    }
-                }
+                await embedCreator(document, content, dom.window);
             }
 
             const blogQuantity = document.getElementById("blogQuantity");
