@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 import sharp from "sharp";
+import ytdl from "ytdl-core"
 
 const cacheData: {
     /**
@@ -576,8 +577,35 @@ async function convert() {
                         img.src = "../../src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-1x.webp";
                     }
                 }
+                // 全てのaタグ(リンク)を取得
+                const aTags = content.querySelectorAll("a");
+                for (const aTag of aTags) {
+                    if (aTag.href.startsWith("https://youtu.be/") || aTag.href.startsWith("https://www.youtube.com/") || aTag.href.startsWith("https://youtube.com/")) {
+                        try {
+                            const videoId = ytdl.getVideoID(aTag.href);
+                            aTag.parentElement?.insertAdjacentHTML("afterend", `<iframe id="youtubeiFrame" src="${"https://www.youtube.com/embed/" + videoId}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`);
+                        } catch (e) {
+                            try {
+                                const playlist = new URL(aTag.href).searchParams.get("list");
+                                const si = new URL(aTag.href).searchParams.get("si");
+                                aTag.parentElement?.insertAdjacentHTML("afterend", `<iframe id="youtubeiFrame" src="https://www.youtube.com/embed/videoseries?&amp;list=${playlist}${si ? "&si=" + si : ""}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`);
+                            } catch (e) { }
+                        }
+                    } else if (aTag.href.startsWith("https://x.com/")) {
+                        try {
+                            const slashSplit = aTag.href.split("/");
+                            const userId = slashSplit[3];
+                            const postId = slashSplit[5];
+                            const data: { html: string } = await (await fetch("https://publish.twitter.com/oembed?url=https://twitter.com/" + userId + "/status/" + postId)).json();
+                            if (!data.html) continue;
+                            const embed = (new JSDOM("<div>" + data.html + "</div>")).window.document.body.firstChild as HTMLElement;
+                            if (!embed) continue;
+                            aTag.insertAdjacentElement("afterend", embed);
+                            embed.id = "twitterEmbed";
+                        } catch (e) { }
+                    }
+                }
             }
-
 
             const blogQuantity = document.getElementById("blogQuantity");
             if (blogQuantity) blogQuantity.innerHTML = "記事数: " + Object.keys(blogInfo).length.toString();
