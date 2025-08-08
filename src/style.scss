@@ -316,15 +316,15 @@ main {
             object-fit: cover;
         }
 
-        div#twitterProfileEmbed:hover {
-            background: rgb(247, 249, 249);
-        }
-
-        div#twitterProfileEmbed:active {
-            background: rgba(230, 236, 240, 0.7);
-        }
-
         div#twitterProfileEmbed {
+            &:active {
+                background: rgba(230, 236, 240, 0.7);
+            }
+
+            &:hover {
+                background: rgb(247, 249, 249);
+            }
+
             max-width: 550px;
             margin: auto;
             border-radius: 10px;
@@ -483,7 +483,8 @@ main {
     }
 
     section#blogList {
-        overflow: hidden;
+        overflow-x: clip;
+        overflow-y: visible;
 
         h2 {
             margin-bottom: 0;

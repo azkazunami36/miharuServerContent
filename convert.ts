@@ -8,6 +8,7 @@ import ytdl from "ytdl-core";
 import puppeteer from "puppeteer";
 import { DOMWindow } from "jsdom";
 
+// キャッシュデータがある場合は取得し、ない場合はここで定義される
 const cacheData: {
     /**
      * ブログデータのインストール先を`cache.json`に入力してください。絶対パスである必要があります。
@@ -39,40 +40,11 @@ const miharuBlogImportantFiles = [
     ".gitignore"
 ];
 
-// cacheData.miharuBlogRepositoryFolderPathから必要なファイル以外すべてを削除する。削除するものがフォルダである場合を考慮する。
-function deleteUnnecessaryFiles() {
-    const files = fs.readdirSync(cacheData.miharuBlogRepositoryFolderPath);
-    for (const file of files) {
-        if (!miharuBlogImportantFiles.includes(file)) {
-            const path = cacheData.miharuBlogRepositoryFolderPath + "/" + file;
-            if (fs.statSync(path).isDirectory()) {
-                fs.rmSync(path, { recursive: true });
-            } else {
-                fs.unlinkSync(path);
-            }
-        }
-    }
-}
-
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
-let headerShareTemp: String;
-function getHeaderShare() { if (!headerShareTemp) headerShareTemp = fs.readFileSync("./templateHTML/headerShare.html", "utf-8"); return headerShareTemp; };
-
-let blogInfoJSONTemp: {
-    type: "normal";
-    title: string;
-    timestamp: string; // YYYY/MM/DD
-    editTimestamp?: string; // YYYY/MM/DD
-    genre: string;
-    keyword: string[];
-    created: boolean;
-    incomplete: boolean;
-    topImageName?: string;
-    htmlBlogSourceIs?: boolean;
-}[];
-function getBlogInfoJSON() {
-    if (!blogInfoJSONTemp) blogInfoJSONTemp = JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8")) as {
+const HTMLData = new class HTMLData {
+    #headerShare: String;
+    #blogInfoJSON: {
         type: "normal";
         title: string;
         timestamp: string; // YYYY/MM/DD
@@ -84,60 +56,25 @@ function getBlogInfoJSON() {
         topImageName?: string;
         htmlBlogSourceIs?: boolean;
     }[];
-    return blogInfoJSONTemp;
-}
-
-let genreExplanationJSONTemp: {
-    [genre: string]: {
-        alt: string;
-        reading: string[];
-    }
-};
-function getGenreExplanationJSON() {
-    if (!genreExplanationJSONTemp) genreExplanationJSONTemp = JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8")) as {
+    #genreExplanationJSON: {
         [genre: string]: {
             alt: string;
             reading: string[];
-        };
+        }
     };
-    return genreExplanationJSONTemp;
+    constructor() {
+        this.#headerShare = fs.readFileSync("./templateHTML/headerShare.html", "utf-8");
+        this.#blogInfoJSON = JSON.parse(fs.readFileSync("./blogInfo.json", "utf-8"))
+        this.#genreExplanationJSON = JSON.parse(fs.readFileSync("./genreExplanation.json", "utf-8"))
+    }
+    get headerShare() { return this.#headerShare }
+    get blogInfoJSON() { return this.#blogInfoJSON }
+    get genreExplanationJSON() { return this.#genreExplanationJSON }
 }
 
 function removeEscapedCharacters(url: string): string {
     // 正規表現を使用してエスケープされる記号をすべて取り除く
     return url.replace(/[!#$&'()*+,/:;=?@[\]]/g, '');
-}
-
-// ogp(twitter埋め込みなど)に関するheadタグのprefixを作成する関数
-function createOGPrefix(info: {
-    title?: string;
-    description?: string;
-    image?: string;
-    alt?: string;
-    url?: string;
-    siteName?: string;
-    twitterCard?: "summary" | "summary_large_image" | "app" | "player";
-    twitterSite?: string;
-    twitterCreator?: string;
-}) {
-    const domain = info.url ? new URL(info.url).hostname : undefined;
-    return `\
-    ${info.description ? `<meta name="description" content="${info.description}">` : ""}
-    ${info.title ? `<meta property="og:title" content="${info.title}">` : ""}
-    ${info.description ? `<meta property="og:description" content="${info.description}">` : ""}
-    <meta property="og:type" content="website">
-    ${info.url ? `<meta property="og:url" content="${info.url}">` : ""}
-    ${info.image ? `<meta property="og:image" content="${info.image}">` : ""}
-    ${info.siteName ? `<meta property="og:site_name" content="${info.siteName}">` : ""}
-    <meta property="og:locale" content="ja_JP">
-    ${info.twitterCard ? `<meta name="twitter:card" content="${info.twitterCard}">` : ""}
-    ${info.twitterSite ? `<meta name="twitter:site" content="${info.twitterSite}">` : ""}
-    ${info.twitterCreator ? `<meta name="twitter:creator" content="${info.twitterCreator}">` : ""}
-    ${info.image ? `<meta name="twitter:image" content="${info.image}">` : ""}
-    ${info.title ? `<meta name="twitter:title" content="${info.title}">` : ""}
-    ${info.description ? `<meta name="twitter:description" content="${info.description}">` : ""}
-    ${info.url ? `<meta name="twitter:url" content="${info.url}">` : ""}
-    ${domain ? `<meta name="twitter:domain" content="${domain}">` : ""}`;
 }
 
 /**
@@ -163,12 +100,62 @@ function writeFileSyncCRLF(path: string, data: string) {
 }
 
 /**
+ * これはogPrefixやOGP情報、ヘッダーフッターを一括で設定する関数です。
+ */
+function htmlBaseSet(document: Document, info: {
+            title?: string;
+            description?: string;
+            image?: string;
+            alt?: string;
+            url?: string;
+            siteName?: string;
+            twitterCard?: "summary" | "summary_large_image" | "app" | "player";
+            twitterSite?: string;
+            twitterCreator?: string;
+        }) {
+            const domain = info.url ? new URL(info.url).hostname : undefined;
+
+            // headタグにogPrefixを追加
+            document.head.setAttribute("prefix", ogPrefix);
+
+            // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
+            document.head.innerHTML
+                = HTMLData.headerShare
+                + document.head.innerHTML
+                + `\
+${info.description ? `<meta name="description" content="${info.description}">` : ""}
+${info.title ? `<meta property="og:title" content="${info.title}">` : ""}
+${info.description ? `<meta property="og:description" content="${info.description}">` : ""}
+<meta property="og:type" content="website">
+${info.url ? `<meta property="og:url" content="${info.url}">` : ""}
+${info.image ? `<meta property="og:image" content="${info.image}">` : ""}
+${info.siteName ? `<meta property="og:site_name" content="${info.siteName}">` : ""}
+<meta property="og:locale" content="ja_JP">
+${info.twitterCard ? `<meta name="twitter:card" content="${info.twitterCard}">` : ""}
+${info.twitterSite ? `<meta name="twitter:site" content="${info.twitterSite}">` : ""}
+${info.twitterCreator ? `<meta name="twitter:creator" content="${info.twitterCreator}">` : ""}
+${info.image ? `<meta name="twitter:image" content="${info.image}">` : ""}
+${info.title ? `<meta name="twitter:title" content="${info.title}">` : ""}
+${info.description ? `<meta name="twitter:description" content="${info.description}">` : ""}
+${info.url ? `<meta name="twitter:url" content="${info.url}">` : ""}
+${domain ? `<meta name="twitter:domain" content="${domain}">` : ""}`
+
+            // headerの内容を設定
+            const header = document.getElementsByTagName("header")[0];
+            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
+
+            // footerの内容を設定
+            const footer = document.getElementsByTagName("footer")[0];
+            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
+        };
+
+/**
  * メイン処理
  */
 async function convert() {
     if (!fs.existsSync(cacheData.miharuBlogRepositoryFolderPath + "src/img")) fs.mkdirSync(cacheData.miharuBlogRepositoryFolderPath + "src/img", { recursive: true });
 
-    async function embedCreator(document: Document, content: HTMLElement, window: DOMWindow) {                // 全てのaタグ(リンク)を取得
+    async function embedCreator(document: Document, content: HTMLElement) {
         const aTags = content.querySelectorAll("a");
         for (const aTag of aTags) {
             if (aTag.href.startsWith("https://youtu.be/") || aTag.href.startsWith("https://www.youtube.com/") || aTag.href.startsWith("https://youtube.com/")) {
@@ -305,6 +292,7 @@ async function convert() {
                         console.log("invalid html. continue by" + userId + " & " + postId);
                         continue;
                     }
+                    if (embed.firstChild) (embed.firstChild as HTMLElement).style.maxWidth = "auto";
                     aTag.parentElement?.insertAdjacentElement("afterend", embed);
                     embed.id = "twitterEmbed";
                 } catch (e) { console.log(e) }
@@ -319,11 +307,7 @@ async function convert() {
         const dom = new JSDOM(fs.readFileSync("./templateHTML/homepate.html", "utf-8"));
         const document = dom.window.document;
 
-        // headタグにogPrefixを追加
-        document.head.setAttribute("prefix", ogPrefix);
-
-        // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
-        document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
+        htmlBaseSet(document, {
             title: "みはるのホームページ",
             description: "みはるのホームページです。",
             image: "https://www.miharu.blog/imageSource/ogp.png",
@@ -331,15 +315,7 @@ async function convert() {
             url: "https://www.miharu.blog/",
             siteName: "みはるのホームページ",
             twitterCard: "summary_large_image"
-        });
-
-        // headerの内容を設定
-        const header = document.getElementsByTagName("header")[0];
-        if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
-
-        // footerの内容を設定
-        const footer = document.getElementsByTagName("footer")[0];
-        if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
+        })
 
         const topHomeImage = (document.getElementById("topHomeImage") as HTMLImageElement);
         const imageSrc = "./imageSource/homepage.png";
@@ -355,8 +331,8 @@ async function convert() {
             topHomeImage.src = "src/img/homepage@850x400-1x.webp";
         }
 
-        const blogInfo = getBlogInfoJSON();
-        const genreExplanation = getGenreExplanationJSON();
+        const blogInfo = HTMLData.blogInfoJSON;
+        const genreExplanation = HTMLData.genreExplanationJSON;
         const blogListUL = (() => {
             const blogListUL = document.getElementById("blogList");
             if (!blogListUL) {
@@ -487,7 +463,7 @@ async function convert() {
         const about = document.getElementById("about");
         if (about) {
             about.innerHTML = await marked(fs.readFileSync("./markdownSource/aboutSite.md", "utf-8"));
-            await embedCreator(document, about, dom.window);
+            await embedCreator(document, about);
         }
 
         const blogQuantity = document.getElementById("blogQuantity");
@@ -499,18 +475,14 @@ async function convert() {
     }
     // 記事毎のHTMLを作成する関数
     async function createBlogHTML() {
-        const blogInfo = getBlogInfoJSON();
+        const blogInfo = HTMLData.blogInfoJSON;
         for (let i = 0; i !== Object.keys(blogInfo).length; i++) {
             const dom = new JSDOM(fs.readFileSync("./templateHTML/blogView.html", "utf-8"));
             const document = dom.window.document;
 
             const markdownText = fs.readFileSync("./markdownSource/" + i + "/" + i + ".md", "utf-8");
 
-            // headタグにogPrefixを追加
-            document.head.setAttribute("prefix", ogPrefix);
-
-            // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
-            document.head.innerHTML = getHeaderShare() + document.head.innerHTML + createOGPrefix({
+            htmlBaseSet(document, {
                 title: blogInfo[i].title,
                 description: (await marked(markdownText.split("\n")[0])).replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ''),
                 image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + blogInfo[i].topImageName : undefined,
@@ -531,14 +503,6 @@ async function convert() {
                 return string
             })();
             document.head.appendChild(metaKeyword);
-
-            // headerの内容を設定
-            const header = document.getElementsByTagName("header")[0];
-            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
-
-            // footerの内容を設定
-            const footer = document.getElementsByTagName("footer")[0];
-            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
 
             const fragment = document.createDocumentFragment();
             const title = document.createElement("h1");
@@ -727,7 +691,7 @@ async function convert() {
                         img.src = "../../src/img/" + removeEscapedCharacters(blogInfo[i].genre + blogInfo[i].title + img.src) + "@850x400-1x.webp";
                     }
                 }
-                await embedCreator(document, content, dom.window);
+                await embedCreator(document, content);
             }
 
             const blogQuantity = document.getElementById("blogQuantity");
@@ -755,7 +719,7 @@ async function convert() {
      * 現在未完成
      */
     async function createGenreRootHTML() {
-        const genres = Object.keys(getGenreExplanationJSON());
+        const genres = Object.keys(HTMLData.genreExplanationJSON);
 
         for (const genreName of genres) {
             const dom = new JSDOM(fs.readFileSync("./templateHTML/genreRootHtml.html", "utf-8"));
@@ -765,7 +729,7 @@ async function convert() {
             document.head.setAttribute("prefix", ogPrefix);
 
             // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
-            document.head.innerHTML = getHeaderShare() + document.head.innerHTML;
+            document.head.innerHTML = HTMLData.headerShare + document.head.innerHTML;
 
             document.title = genreName + " - miharu";
 
@@ -785,7 +749,7 @@ async function convert() {
      */
     async function createSiteMapTxt() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
-        const blogInfo = getBlogInfoJSON();
+        const blogInfo = HTMLData.blogInfoJSON;
         let siteMap = baseSiteMap;
         for (let i = 0; i !== Object.keys(blogInfo).length; i++) siteMap += "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/\n";
         writeFileSyncCRLF("sitemap.txt", siteMap);
