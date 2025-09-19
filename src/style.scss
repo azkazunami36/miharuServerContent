@@ -172,6 +172,7 @@ header {
         user-select: none;
 
         a {
+            display: flex;
             text-decoration: none;
             color: inherit;
 
@@ -180,6 +181,12 @@ header {
             &:active {
                 text-decoration: none;
                 color: inherit;
+            }
+
+            img {
+                width: 25%;
+                border-radius: 10px;
+                margin: 0 7px 0 8px;
             }
         }
     }

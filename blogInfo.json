@@ -25,7 +25,7 @@
             "ネットストレージ",
             "解説"
         ],
-        "created": false,
+        "created": true,
         "incomplete": false
     },
     {
@@ -38,7 +38,7 @@
             "命名方法",
             "データ管理"
         ],
-        "created": false,
+        "created": true,
         "incomplete": false
     },
     {
@@ -135,7 +135,7 @@
             "スムーズ",
             "快適に"
         ],
-        "created": false,
+        "created": true,
         "incomplete": false
     },
     {
@@ -318,7 +318,7 @@
             "流す"
         ],
         "created": false,
-        "incomplete": false
+        "incomplete": true
     },
     {
         "type": "normal",
@@ -330,7 +330,7 @@
             "NTFS",
             "圧縮"
         ],
-        "created": false,
+        "created": true,
         "incomplete": false
     },
     {
