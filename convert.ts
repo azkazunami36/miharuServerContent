@@ -1,12 +1,11 @@
 import fs from "fs";
-import { marked, use } from "marked";
+import { marked } from "marked";
 import { JSDOM } from "jsdom";
 import { URL } from "url";
 import hljs from "highlight.js";
 import sharp from "sharp";
 import ytdl from "ytdl-core";
 import puppeteer from "puppeteer";
-import { DOMWindow } from "jsdom";
 
 // キャッシュデータがある場合は取得し、ない場合はここで定義される
 const cacheData: {
@@ -40,6 +39,18 @@ const miharuBlogImportantFiles = [
     ".gitignore"
 ];
 
+// cacheData.miharuBlogRepositoryFolderPathから必要なファイル以外すべてを削除する。削除するものがフォルダである場合を考慮する。
+for (const file of fs.readdirSync(cacheData.miharuBlogRepositoryFolderPath)) {
+    if (!miharuBlogImportantFiles.includes(file)) {
+        const path = cacheData.miharuBlogRepositoryFolderPath + "/" + file;
+        if (fs.statSync(path).isDirectory()) {
+            fs.rmSync(path, { recursive: true });
+        } else {
+            fs.unlinkSync(path);
+        }
+    }
+}
+
 const ogPrefix = `og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#`;
 
 const HTMLData = new class HTMLData {
@@ -51,10 +62,14 @@ const HTMLData = new class HTMLData {
         editTimestamp?: string; // YYYY/MM/DD
         genre: string;
         keyword: string[];
+        /** 完成しているかどうか */
         created: boolean;
+        /** 未完成かどうか */
         incomplete: boolean;
         topImageName?: string;
         htmlBlogSourceIs?: boolean;
+        /** 隠しているかどうか */
+        hidden?: boolean;
     }[];
     #genreExplanationJSON: {
         [genre: string]: {
@@ -103,26 +118,26 @@ function writeFileSyncCRLF(path: string, data: string) {
  * これはogPrefixやOGP情報、ヘッダーフッターを一括で設定する関数です。
  */
 function htmlBaseSet(document: Document, info: {
-            title?: string;
-            description?: string;
-            image?: string;
-            alt?: string;
-            url?: string;
-            siteName?: string;
-            twitterCard?: "summary" | "summary_large_image" | "app" | "player";
-            twitterSite?: string;
-            twitterCreator?: string;
-        }) {
-            const domain = info.url ? new URL(info.url).hostname : undefined;
+    title?: string;
+    description?: string;
+    image?: string;
+    alt?: string;
+    url?: string;
+    siteName?: string;
+    twitterCard?: "summary" | "summary_large_image" | "app" | "player";
+    twitterSite?: string;
+    twitterCreator?: string;
+}) {
+    const domain = info.url ? new URL(info.url).hostname : undefined;
 
-            // headタグにogPrefixを追加
-            document.head.setAttribute("prefix", ogPrefix);
+    // headタグにogPrefixを追加
+    document.head.setAttribute("prefix", ogPrefix);
 
-            // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
-            document.head.innerHTML
-                = HTMLData.headerShare
-                + document.head.innerHTML
-                + `\
+    // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
+    document.head.innerHTML
+        = HTMLData.headerShare
+        + document.head.innerHTML
+        + `\
 ${info.description ? `<meta name="description" content="${info.description}">` : ""}
 ${info.title ? `<meta property="og:title" content="${info.title}">` : ""}
 ${info.description ? `<meta property="og:description" content="${info.description}">` : ""}
@@ -140,14 +155,14 @@ ${info.description ? `<meta name="twitter:description" content="${info.descripti
 ${info.url ? `<meta name="twitter:url" content="${info.url}">` : ""}
 ${domain ? `<meta name="twitter:domain" content="${domain}">` : ""}`
 
-            // headerの内容を設定
-            const header = document.getElementsByTagName("header")[0];
-            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
+    // headerの内容を設定
+    const header = document.getElementsByTagName("header")[0];
+    if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
 
-            // footerの内容を設定
-            const footer = document.getElementsByTagName("footer")[0];
-            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
-        };
+    // footerの内容を設定
+    const footer = document.getElementsByTagName("footer")[0];
+    if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
+};
 
 /**
  * メイン処理
@@ -310,9 +325,9 @@ async function convert() {
         htmlBaseSet(document, {
             title: "みはるのホームページ",
             description: "みはるのホームページです。",
-            image: "https://www.miharu.blog/imageSource/ogp.png",
+            image: "https://www.miharublog.uk/imageSource/ogp.png",
             alt: "みはるのホームページ",
-            url: "https://www.miharu.blog/",
+            url: "https://www.miharublog.uk/",
             siteName: "みはるのホームページ",
             twitterCard: "summary_large_image"
         })
@@ -351,7 +366,7 @@ async function convert() {
             const markdownText = fs.readFileSync("./markdownSource/" + i + "/" + i + ".md", "utf-8");
             const li = document.createElement("li");
             if (!info.created) li.classList.add("nocreated");
-            if (info.incomplete) li.classList.add("incomplete");
+            if (info.incomplete || info.hidden) li.classList.add("incomplete");
             const leftDiv = document.createElement("div");
             leftDiv.classList.add("left");
             const rightDiv = document.createElement("div");
@@ -450,6 +465,23 @@ async function convert() {
                 incomplete.appendChild(popup);
                 span.appendChild(incomplete);
             };
+            if (info.hidden) {
+                const hyphen = document.createElement("span");
+                hyphen.id = "hyphen";
+                hyphen.innerHTML = "-";
+                span.appendChild(hyphen);
+                const hidden = document.createElement("span");
+                hidden.id = "hidden";
+                hidden.innerHTML = "隠された記事";
+                const popup = document.createElement("span");
+                popup.classList.add("popup");
+                const popupBody = document.createElement("span");
+                popupBody.classList.add("popupBody");
+                popupBody.innerHTML = "説明\nこの記事は隠されています。";
+                popup.appendChild(popupBody);
+                hidden.appendChild(popup);
+                span.appendChild(hidden);
+            }
 
             textBox.appendChild(span);
             box.appendChild(textBox);
@@ -485,8 +517,8 @@ async function convert() {
             htmlBaseSet(document, {
                 title: blogInfo[i].title,
                 description: (await marked(markdownText.split("\n")[0])).replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ''),
-                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + blogInfo[i].topImageName : undefined,
-                url: "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/",
+                image: (blogInfo[i].topImageName !== undefined) ? "https://www.miharublog.uk/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/" + blogInfo[i].topImageName : undefined,
+                url: "https://www.miharublog.uk/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/",
                 siteName: "みはるのホームページ",
                 twitterCard: "summary_large_image"
             });
@@ -725,21 +757,7 @@ async function convert() {
             const dom = new JSDOM(fs.readFileSync("./templateHTML/genreRootHtml.html", "utf-8"));
             const document = dom.window.document;
 
-            // headタグにogPrefixを追加
-            document.head.setAttribute("prefix", ogPrefix);
-
-            // 共有ヘッダーをhomepate.htmlのヘッダーにマージ、そしてogpに関する情報をheadタグに追加
-            document.head.innerHTML = HTMLData.headerShare + document.head.innerHTML;
-
-            document.title = genreName + " - miharu";
-
-            // headerの内容を設定
-            const header = document.getElementsByTagName("header")[0];
-            if (header) header.innerHTML = fs.readFileSync("./templateHTML/header.html", "utf-8");
-
-            // footerの内容を設定
-            const footer = document.getElementsByTagName("footer")[0];
-            if (footer) footer.innerHTML = fs.readFileSync("./templateHTML/footer.html", "utf-8");
+            htmlBaseSet(document, {});
         }
 
     }
@@ -751,7 +769,7 @@ async function convert() {
         const baseSiteMap = fs.readFileSync("./baseSiteMap.txt", "utf-8");
         const blogInfo = HTMLData.blogInfoJSON;
         let siteMap = baseSiteMap;
-        for (let i = 0; i !== Object.keys(blogInfo).length; i++) siteMap += "https://www.miharu.blog/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/\n";
+        for (let i = 0; i !== Object.keys(blogInfo).length; i++) if (blogInfo[i].created && !blogInfo[i].hidden && !blogInfo[i].incomplete) siteMap += "https://www.miharublog.uk/" + blogInfo[i].genre + "/" + removeEscapedCharacters(blogInfo[i].title) + "/\n";
         writeFileSyncCRLF("sitemap.txt", siteMap);
     }
 
