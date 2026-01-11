@@ -377,5 +377,16 @@
         "created": true,
         "incomplete": false,
         "hidden": true
+    },
+    {
+        "type": "normal",
+        "title": "身内会で爆音&自由スピーカーセット",
+        "timestamp": "2026/1/11",
+        "genre": "Blog",
+        "keyword": [
+        ],
+        "created": true,
+        "incomplete": false,
+        "hidden": false
     }
 ]
