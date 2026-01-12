@@ -490,10 +490,14 @@ main {
             border-radius: 15px;
             padding: 0px;
             box-shadow: #00000030 0px 0px 0px 1px;
-            overflow: hidden;
+            overflow-y: hidden;
+            overflow-x: scroll;
+            max-width: fit-content;
             border-spacing: 0;
             margin-block-start: 1em;
             margin-block-end: 1em;
+            display: block;
+            margin: 1em auto;
 
             thead {
                 tr {
